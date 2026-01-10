@@ -1,0 +1,71 @@
+# Kashif AI Gateway Configuration
+
+server:
+  host: "0.0.0.0"
+  port: 8090
+  read_timeout: 30s
+  write_timeout: 120s
+
+logging:
+  level: "info"
+  format: "json"
+
+auth:
+  enabled: true
+  # Add your API keys here or use AI_GATEWAY_API_KEY environment variable
+  keys: []
+  # Or load from file:
+  # keys_file: "/etc/ai-gateway/api-keys.yaml"
+
+rate_limit:
+  enabled: true
+  requests_per_minute: 60
+  burst: 10
+
+default_backend: "opencode"
+
+backends:
+  opencode:
+    enabled: true
+    type: "opencode"
+    host: "localhost"
+    port: 3001
+    timeout: 60s
+    models:
+      - id: "big-pickle"
+        aliases: ["pickle", "bp"]
+        free: true
+      - id: "grok-code-fast-1"
+        aliases: ["grok", "grok-fast"]
+        free: true
+      - id: "glm-4.7"
+        aliases: ["glm", "glm4"]
+        free: true
+      - id: "minimax-m2.1"
+        aliases: ["minimax", "mm"]
+        free: true
+
+  # Future backends (disabled by default)
+  copilot:
+    enabled: false
+    type: "copilot-cli"
+    host: "localhost"
+    port: 0
+    timeout: 60s
+    models: []
+
+  gemini:
+    enabled: false
+    type: "gemini-cli"
+    host: "localhost"
+    port: 0
+    timeout: 60s
+    models: []
+
+  claude:
+    enabled: false
+    type: "claude-code"
+    host: "localhost"
+    port: 0
+    timeout: 60s
+    models: []
