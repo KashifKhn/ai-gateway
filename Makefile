@@ -1,52 +1,53 @@
-# AI Gateway
+.PHONY: build run clean test docker-build docker-up docker-down deploy
 
-.PHONY: build run clean test
-
-# Default target
 all: build
 
-# Build the gateway
 build:
 	go build -o ai-gateway ./cmd/server
 
-# Run the gateway (assumes OpenCode is already running)
 run: build
 	CONFIG_PATH=config/config.yaml ./ai-gateway
 
-# Run with OpenCode (starts both)
 run-full:
 	./scripts/start.sh
 
-# Clean build artifacts
 clean:
-	rm -f ai-gateway
+	rm -f ai-gateway ai-gateway-linux
 
-# Run tests
 test:
 	go test -v ./...
 
-# Format code
 fmt:
 	go fmt ./...
 
-# Lint code
 lint:
 	golangci-lint run
 
-# Generate API key
 generate-key:
 	./scripts/generate-key.sh
 
-# Build for Linux (for deployment)
 build-linux:
 	GOOS=linux GOARCH=amd64 go build -o ai-gateway-linux ./cmd/server
 
-# Install dependencies
 deps:
 	go mod tidy
 	go mod download
 
-# Help
+docker-build:
+	docker build -t ai-gateway .
+
+docker-up:
+	docker compose up -d
+
+docker-down:
+	docker compose down
+
+docker-logs:
+	docker compose logs -f
+
+deploy:
+	./scripts/deploy.sh
+
 help:
 	@echo "Available targets:"
 	@echo "  build        - Build the gateway binary"
@@ -58,3 +59,8 @@ help:
 	@echo "  generate-key - Generate a new API key"
 	@echo "  build-linux  - Build for Linux deployment"
 	@echo "  deps         - Install/update dependencies"
+	@echo "  docker-build - Build Docker image"
+	@echo "  docker-up    - Start with Docker Compose"
+	@echo "  docker-down  - Stop Docker Compose"
+	@echo "  docker-logs  - View Docker logs"
+	@echo "  deploy       - Full deployment script"

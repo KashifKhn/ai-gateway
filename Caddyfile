@@ -1,0 +1,13 @@
+{$DOMAIN:localhost} {
+    reverse_proxy gateway:8090
+    
+    header {
+        -Server
+        -X-Powered-By
+    }
+    
+    log {
+        output stdout
+        format console
+    }
+}

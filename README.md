@@ -1,162 +1,61 @@
-# Kashif AI Gateway
+# AI Gateway
 
-Your personal OpenAI/Gemini alternative powered by OpenCode's free models.
+Personal OpenAI-compatible API gateway using free AI models via OpenCode backend.
 
-## Quick Start
+**Created by Kashif Khan**
 
-### 1. Prerequisites
+## Features
 
-- Go 1.21+
-- OpenCode installed (`curl -fsSL https://opencode.ai/install | bash`)
+- OpenAI-compatible API
+- Free AI models via OpenCode
+- Streaming support (SSE)
+- API key authentication
+- Auto SSL with Caddy
+- Docker deployment
 
-### 2. Build
+## Deploy
 
 ```bash
+git clone https://github.com/KashifKhn/ai-gateway.git
 cd ai-gateway
-go mod tidy
-go build -o ai-gateway ./cmd/server
+cp .env.example .env
+nano .env  # Set API_KEY and DOMAIN
+./scripts/deploy.sh
 ```
 
-### 3. Start OpenCode Server
+## Commands
 
-In a separate terminal:
-```bash
-opencode serve --port 3001
-```
+| Command | Description |
+|---------|-------------|
+| `make docker-up` | Start |
+| `make docker-down` | Stop |
+| `make docker-logs` | View logs |
+| `make deploy` | Full deploy |
 
-### 4. Start AI Gateway
+## API Endpoints
 
-```bash
-./ai-gateway
-```
+| Method | Endpoint | Auth |
+|--------|----------|------|
+| GET | /health | No |
+| GET | /v1/models | Yes |
+| GET | /v1/backends | Yes |
+| POST | /v1/chat/completions | Yes |
 
-Or use the combined script:
-```bash
-./scripts/start.sh
-```
+## Environment Variables
 
-## API Usage
+| Variable | Default | Description |
+|----------|---------|-------------|
+| DOMAIN | localhost | Domain for SSL |
+| PORT | 8090 | Gateway port |
+| API_KEY | - | Your API key |
+| AUTH_ENABLED | true | Enable auth |
+| OPENCODE_HOST | host.docker.internal | OpenCode host |
+| OPENCODE_PORT | 3001 | OpenCode port |
 
-### Default API Key
-```
-sk-kashif-ai-gateway-secret-key-2024
-```
+## Requirements
 
-### Health Check
-```bash
-curl http://localhost:8080/health
-```
-
-### List Models
-```bash
-curl -H "Authorization: Bearer sk-kashif-ai-gateway-secret-key-2024" \
-     http://localhost:8080/v1/models
-```
-
-### Chat Completion (Non-streaming)
-```bash
-curl -X POST http://localhost:8080/v1/chat/completions \
-  -H "Authorization: Bearer sk-kashif-ai-gateway-secret-key-2024" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "big-pickle",
-    "messages": [{"role": "user", "content": "Hello!"}]
-  }'
-```
-
-### Chat Completion (Streaming)
-```bash
-curl -X POST http://localhost:8080/v1/chat/completions \
-  -H "Authorization: Bearer sk-kashif-ai-gateway-secret-key-2024" \
-  -H "Content-Type: application/json" \
-  -N \
-  -d '{
-    "model": "big-pickle",
-    "messages": [{"role": "user", "content": "Tell me a joke"}],
-    "stream": true
-  }'
-```
-
-## Using with OpenAI SDK
-
-### Python
-```python
-from openai import OpenAI
-
-client = OpenAI(
-    base_url="http://localhost:8080/v1",
-    api_key="sk-kashif-ai-gateway-secret-key-2024"
-)
-
-response = client.chat.completions.create(
-    model="big-pickle",
-    messages=[{"role": "user", "content": "Hello!"}]
-)
-print(response.choices[0].message.content)
-```
-
-### JavaScript/TypeScript
-```typescript
-import OpenAI from 'openai'
-
-const client = new OpenAI({
-  baseURL: 'http://localhost:8080/v1',
-  apiKey: 'sk-kashif-ai-gateway-secret-key-2024'
-})
-
-const response = await client.chat.completions.create({
-  model: 'big-pickle',
-  messages: [{ role: 'user', content: 'Hello!' }]
-})
-console.log(response.choices[0].message.content)
-```
-
-## Available Models
-
-| Model | Aliases | Free |
-|-------|---------|------|
-| big-pickle | pickle, bp | Yes |
-| grok-code-fast-1 | grok, grok-fast | Yes |
-| glm-4.7 | glm, glm4 | Yes |
-| minimax-m2.1 | minimax, mm | Yes |
-
-## Configuration
-
-Edit `config/config.yaml` to customize:
-- Server port and host
-- API keys
-- Rate limiting
-- Backend configurations
-
-## Custom API Key
-
-Generate a new key:
-```bash
-./scripts/generate-key.sh
-```
-
-Or set via environment:
-```bash
-export AI_GATEWAY_API_KEY="your-custom-key"
-./ai-gateway
-```
-
-## Directory Structure
-
-```
-ai-gateway/
-├── cmd/server/          # Main entry point
-├── internal/
-│   ├── api/             # HTTP handlers
-│   ├── adapters/        # Backend adapters
-│   ├── auth/            # Authentication
-│   ├── config/          # Configuration
-│   └── models/          # Data models
-├── config/              # Config files
-├── scripts/             # Utility scripts
-├── Makefile
-└── README.md
-```
+- Docker & Docker Compose
+- OpenCode: `curl -fsSL https://opencode.ai/install | bash`
 
 ## License
 

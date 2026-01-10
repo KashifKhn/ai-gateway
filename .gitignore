@@ -1,5 +1,6 @@
 # Binaries
 ai-gateway
+ai-gateway-linux
 *.exe
 
 # Environment
@@ -19,3 +20,7 @@ Thumbs.db
 
 # Config with secrets
 config/api-keys.yaml
+
+# Docker
+caddy_data/
+caddy_config/
