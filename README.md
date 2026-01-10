@@ -25,12 +25,12 @@ nano .env  # Set API_KEY and DOMAIN
 
 ## Commands
 
-| Command | Description |
-|---------|-------------|
-| `make docker-up` | Start |
-| `make docker-down` | Stop |
-| `make docker-logs` | View logs |
-| `make deploy` | Full deploy |
+| Command            | Description |
+| ------------------ | ----------- |
+| `make docker-up`   | Start       |
+| `make docker-down` | Stop        |
+| `make docker-logs` | View logs   |
+| `make deploy`      | Full deploy |
 
 ## API Endpoints
 
@@ -52,9 +52,7 @@ All endpoints except `/health` require `Authorization: Bearer <API_KEY>` header.
 ```json
 {
   "object": "list",
-  "data": [
-    { "id": "big-pickle", "backend": "opencode", "free": true }
-  ]
+  "data": [{ "id": "big-pickle", "backend": "opencode", "free": true }]
 }
 ```
 
@@ -63,15 +61,14 @@ All endpoints except `/health` require `Authorization: Bearer <API_KEY>` header.
 ```json
 {
   "object": "list",
-  "data": [
-    { "id": "opencode", "name": "OpenCode", "status": "active" }
-  ]
+  "data": [{ "id": "opencode", "name": "OpenCode", "status": "active" }]
 }
 ```
 
 ### POST /v1/chat/completions
 
 **Request:**
+
 ```json
 {
   "model": "big-pickle",
@@ -81,26 +78,14 @@ All endpoints except `/health` require `Authorization: Bearer <API_KEY>` header.
 ```
 
 **Response:**
+
 ```json
 {
   "id": "chatcmpl-xxx",
   "model": "big-pickle",
-  "choices": [
-    { "message": { "role": "assistant", "content": "Hi there!" } }
-  ]
+  "choices": [{ "message": { "role": "assistant", "content": "Hi there!" } }]
 }
 ```
-
-## Environment Variables
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| DOMAIN | localhost | Domain for SSL |
-| PORT | 8090 | Gateway port |
-| API_KEY | - | Your API key |
-| AUTH_ENABLED | true | Enable auth |
-| OPENCODE_HOST | localhost | OpenCode host |
-| OPENCODE_PORT | 3001 | OpenCode port |
 
 ## Requirements
 
