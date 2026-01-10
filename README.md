@@ -34,12 +34,62 @@ nano .env  # Set API_KEY and DOMAIN
 
 ## API Endpoints
 
-| Method | Endpoint | Auth |
-|--------|----------|------|
-| GET | /health | No |
-| GET | /v1/models | Yes |
-| GET | /v1/backends | Yes |
-| POST | /v1/chat/completions | Yes |
+All endpoints except `/health` require `Authorization: Bearer <API_KEY>` header.
+
+### GET /health
+
+```json
+{
+  "status": "healthy",
+  "version": "1.0.0",
+  "backends": { "opencode": "connected" },
+  "uptime": 194
+}
+```
+
+### GET /v1/models
+
+```json
+{
+  "object": "list",
+  "data": [
+    { "id": "big-pickle", "backend": "opencode", "free": true }
+  ]
+}
+```
+
+### GET /v1/backends
+
+```json
+{
+  "object": "list",
+  "data": [
+    { "id": "opencode", "name": "OpenCode", "status": "active" }
+  ]
+}
+```
+
+### POST /v1/chat/completions
+
+**Request:**
+```json
+{
+  "model": "big-pickle",
+  "messages": [{ "role": "user", "content": "Hello" }],
+  "stream": false
+}
+```
+
+**Response:**
+```json
+{
+  "id": "chatcmpl-xxx",
+  "model": "big-pickle",
+  "choices": [
+    { "message": { "role": "assistant", "content": "Hi there!" } }
+  ]
+}
+```
 
 ## Environment Variables
 
@@ -49,7 +99,7 @@ nano .env  # Set API_KEY and DOMAIN
 | PORT | 8090 | Gateway port |
 | API_KEY | - | Your API key |
 | AUTH_ENABLED | true | Enable auth |
-| OPENCODE_HOST | host.docker.internal | OpenCode host |
+| OPENCODE_HOST | localhost | OpenCode host |
 | OPENCODE_PORT | 3001 | OpenCode port |
 
 ## Requirements
