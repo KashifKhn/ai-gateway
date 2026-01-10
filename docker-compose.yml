@@ -3,39 +3,27 @@ services:
     build: .
     container_name: ai-gateway
     restart: unless-stopped
-    ports:
-      - "8090:8090"
+    network_mode: host
     environment:
       - PORT=8090
       - AUTH_ENABLED=${AUTH_ENABLED:-true}
       - API_KEY=${API_KEY}
-      - OPENCODE_HOST=${OPENCODE_HOST:-host.docker.internal}
+      - OPENCODE_HOST=${OPENCODE_HOST:-localhost}
       - OPENCODE_PORT=${OPENCODE_PORT:-3001}
       - RATE_LIMIT_ENABLED=${RATE_LIMIT_ENABLED:-true}
       - RATE_LIMIT_RPM=${RATE_LIMIT_RPM:-60}
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8090/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
 
   caddy:
     image: caddy:alpine
     container_name: ai-gateway-caddy
     restart: unless-stopped
-    ports:
-      - "80:80"
-      - "443:443"
+    network_mode: host
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
       - caddy_config:/config
     environment:
       - DOMAIN=${DOMAIN:-localhost}
-    depends_on:
-      - gateway
 
 volumes:
   caddy_data:
