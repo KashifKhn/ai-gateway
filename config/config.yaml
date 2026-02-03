@@ -42,6 +42,15 @@ backends:
       - id: "minimax-m2.1"
         aliases: ["minimax", "mm"]
         free: true
+      - id: "gpt-5-nano"
+        aliases: ["gpt5", "nano", "gpt-5"]
+        free: true
+      - id: "kimi-k2.5"
+        aliases: ["kimi", "k2.5"]
+        free: true
+      - id: "trinity-large"
+        aliases: ["trinity", "tl"]
+        free: true
 
   # Future backends (disabled by default)
   copilot:
