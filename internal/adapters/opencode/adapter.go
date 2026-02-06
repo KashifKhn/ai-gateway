@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -378,6 +379,9 @@ func (a *Adapter) sendMessageStreaming(ctx context.Context, sessionID, message, 
 		reader := io.Reader(eventResp.Body)
 		scanner := bufio.NewScanner(reader)
 		var currentMessageID string
+		var assistantMessageID string
+
+		log.Printf("[STREAM DEBUG] Event listener started for session: %s", sessionID)
 
 		for scanner.Scan() {
 			line := scanner.Text()
@@ -394,36 +398,57 @@ func (a *Adapter) sendMessageStreaming(ctx context.Context, sessionID, message, 
 			var event struct {
 				Type       string `json:"type"`
 				Properties struct {
+					Info struct {
+						ID        string `json:"id"`
+						SessionID string `json:"sessionID"`
+						Role      string `json:"role"`
+					} `json:"info"`
 					Part struct {
 						MessageID string `json:"messageID"`
 						SessionID string `json:"sessionID"`
 						Type      string `json:"type"`
 						Text      string `json:"text"`
+						Reason    string `json:"reason"`
 					} `json:"part"`
-					Delta string `json:"delta"`
+					Delta     string `json:"delta"`
+					SessionID string `json:"sessionID"`
+					Status    struct {
+						Type string `json:"type"`
+					} `json:"status"`
 				} `json:"properties"`
 			}
 
 			if err := json.Unmarshal([]byte(data), &event); err != nil {
+				log.Printf("[STREAM DEBUG] Failed to parse event: %v", err)
 				continue
 			}
 
-			// Track message ID from first event
+			log.Printf("[STREAM DEBUG] Event type=%s sessionID=%s", event.Type, event.Properties.Info.SessionID)
+
+			// Capture assistant message ID from message.updated event
+			if event.Type == "message.updated" && event.Properties.Info.SessionID == sessionID && event.Properties.Info.Role == "assistant" {
+				if assistantMessageID == "" {
+					assistantMessageID = event.Properties.Info.ID
+					log.Printf("[STREAM DEBUG] Found assistant message ID: %s", assistantMessageID)
+				}
+			}
+
+			// Track message ID from first part event
 			if event.Type == "message.part.updated" && event.Properties.Part.SessionID == sessionID {
-				if currentMessageID == "" {
+				log.Printf("[STREAM DEBUG] message.part.updated: messageID=%s type=%s deltaLen=%d",
+					event.Properties.Part.MessageID, event.Properties.Part.Type, len(event.Properties.Delta))
+
+				if currentMessageID == "" && assistantMessageID != "" && event.Properties.Part.MessageID == assistantMessageID {
 					currentMessageID = event.Properties.Part.MessageID
+					log.Printf("[STREAM DEBUG] Starting stream for message: %s", currentMessageID)
 					messageIDChan <- currentMessageID
 				}
 
-				// Only process events for our message
-				if event.Properties.Part.MessageID == currentMessageID && event.Properties.Part.Type == "text" {
-					// Send delta if available
-					content := event.Properties.Delta
-					if content == "" {
-						content = event.Properties.Part.Text
-					}
-
-					if content != "" {
+				// Only process events for our assistant message
+				if event.Properties.Part.MessageID == currentMessageID {
+					// Send delta for text parts only
+					if event.Properties.Part.Type == "text" && event.Properties.Delta != "" {
+						log.Printf("[STREAM DEBUG] Sending delta: %q", event.Properties.Delta)
 						chunks <- models.StreamChunk{
 							ID:      chunkID,
 							Object:  "chat.completion.chunk",
@@ -433,25 +458,35 @@ func (a *Adapter) sendMessageStreaming(ctx context.Context, sessionID, message, 
 								{
 									Index: 0,
 									Delta: models.Delta{
-										Content: content,
+										Content: event.Properties.Delta,
 									},
 								},
 							},
 						}
 					}
+
+					// Check for step-finish (completion)
+					if event.Properties.Part.Type == "step-finish" {
+						log.Printf("[STREAM DEBUG] Stream completed (step-finish)")
+						cancel()
+						return
+					}
 				}
 			}
 
-			// Check for completion
-			if event.Type == "message.completed" && event.Properties.Part.MessageID == currentMessageID {
+			// Also check for session.idle as backup completion signal
+			if event.Type == "session.idle" && event.Properties.SessionID == sessionID && currentMessageID != "" {
+				log.Printf("[STREAM DEBUG] Stream completed (session.idle)")
 				cancel()
 				return
 			}
 		}
 
 		if err := scanner.Err(); err != nil {
+			log.Printf("[STREAM DEBUG] Scanner error: %v", err)
 			errChan <- fmt.Errorf("error reading event stream: %w", err)
 		}
+		log.Printf("[STREAM DEBUG] Event listener ended")
 	}()
 
 	// Send the message
