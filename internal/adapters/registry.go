@@ -54,13 +54,12 @@ func (r *Registry) FindAdapterForModel(model string) (Adapter, string, error) {
 
 	if backendID != "" {
 		adapter, ok := r.adapters[backendID]
-		if !ok {
-			return nil, "", fmt.Errorf("backend '%s' not found", backendID)
+		if ok {
+			if !adapter.SupportsModel(modelID) {
+				return nil, "", fmt.Errorf("model '%s' not found in backend '%s'", modelID, backendID)
+			}
+			return adapter, adapter.ResolveModel(modelID), nil
 		}
-		if !adapter.SupportsModel(modelID) {
-			return nil, "", fmt.Errorf("model '%s' not found in backend '%s'", modelID, backendID)
-		}
-		return adapter, adapter.ResolveModel(modelID), nil
 	}
 
 	if defaultAdapter, ok := r.adapters[r.defaultBackend]; ok {
