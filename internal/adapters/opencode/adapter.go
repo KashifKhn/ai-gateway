@@ -1,6 +1,7 @@
 package opencode
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -329,6 +330,131 @@ func (a *Adapter) sendMessageNonStreaming(ctx context.Context, sessionID, messag
 }
 
 func (a *Adapter) sendMessageStreaming(ctx context.Context, sessionID, message, modelID string, chunks chan<- models.StreamChunk) error {
+	chunkID := fmt.Sprintf("chatcmpl-%s", sessionID)
+	created := time.Now().Unix()
+
+	// Send initial role chunk
+	chunks <- models.StreamChunk{
+		ID:      chunkID,
+		Object:  "chat.completion.chunk",
+		Created: created,
+		Model:   modelID,
+		Choices: []models.ChunkChoice{
+			{
+				Index: 0,
+				Delta: models.Delta{
+					Role: "assistant",
+				},
+			},
+		},
+	}
+
+	// Connect to SSE event stream
+	eventCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	eventReq, err := http.NewRequestWithContext(eventCtx, "GET", a.baseURL+"/event", nil)
+	if err != nil {
+		return fmt.Errorf("failed to create event request: %w", err)
+	}
+	eventReq.Header.Set("Accept", "text/event-stream")
+
+	eventResp, err := a.httpClient.Do(eventReq)
+	if err != nil {
+		return fmt.Errorf("failed to connect to event stream: %w", err)
+	}
+	defer eventResp.Body.Close()
+
+	if eventResp.StatusCode != http.StatusOK {
+		return fmt.Errorf("event stream returned status %d", eventResp.StatusCode)
+	}
+
+	// Channel to receive message ID
+	messageIDChan := make(chan string, 1)
+	errChan := make(chan error, 1)
+
+	// Start goroutine to listen for SSE events
+	go func() {
+		reader := io.Reader(eventResp.Body)
+		scanner := bufio.NewScanner(reader)
+		var currentMessageID string
+
+		for scanner.Scan() {
+			line := scanner.Text()
+
+			if !strings.HasPrefix(line, "data: ") {
+				continue
+			}
+
+			data := strings.TrimPrefix(line, "data: ")
+			if data == "" {
+				continue
+			}
+
+			var event struct {
+				Type       string `json:"type"`
+				Properties struct {
+					Part struct {
+						MessageID string `json:"messageID"`
+						SessionID string `json:"sessionID"`
+						Type      string `json:"type"`
+						Text      string `json:"text"`
+					} `json:"part"`
+					Delta string `json:"delta"`
+				} `json:"properties"`
+			}
+
+			if err := json.Unmarshal([]byte(data), &event); err != nil {
+				continue
+			}
+
+			// Track message ID from first event
+			if event.Type == "message.part.updated" && event.Properties.Part.SessionID == sessionID {
+				if currentMessageID == "" {
+					currentMessageID = event.Properties.Part.MessageID
+					messageIDChan <- currentMessageID
+				}
+
+				// Only process events for our message
+				if event.Properties.Part.MessageID == currentMessageID && event.Properties.Part.Type == "text" {
+					// Send delta if available
+					content := event.Properties.Delta
+					if content == "" {
+						content = event.Properties.Part.Text
+					}
+
+					if content != "" {
+						chunks <- models.StreamChunk{
+							ID:      chunkID,
+							Object:  "chat.completion.chunk",
+							Created: created,
+							Model:   modelID,
+							Choices: []models.ChunkChoice{
+								{
+									Index: 0,
+									Delta: models.Delta{
+										Content: content,
+									},
+								},
+							},
+						}
+					}
+				}
+			}
+
+			// Check for completion
+			if event.Type == "message.completed" && event.Properties.Part.MessageID == currentMessageID {
+				cancel()
+				return
+			}
+		}
+
+		if err := scanner.Err(); err != nil {
+			errChan <- fmt.Errorf("error reading event stream: %w", err)
+		}
+	}()
+
+	// Send the message
 	reqBody := map[string]interface{}{
 		"parts": []map[string]interface{}{
 			{
@@ -348,74 +474,44 @@ func (a *Adapter) sendMessageStreaming(ctx context.Context, sessionID, message, 
 
 	body, _ := json.Marshal(reqBody)
 
-	req, err := http.NewRequestWithContext(ctx, "POST", a.baseURL+"/session/"+sessionID+"/message", bytes.NewReader(body))
+	msgReq, err := http.NewRequestWithContext(ctx, "POST", a.baseURL+"/session/"+sessionID+"/message", bytes.NewReader(body))
 	if err != nil {
-		return err
+		cancel()
+		return fmt.Errorf("failed to create message request: %w", err)
 	}
-	req.Header.Set("Content-Type", "application/json")
+	msgReq.Header.Set("Content-Type", "application/json")
 
-	resp, err := a.httpClient.Do(req)
+	msgResp, err := a.httpClient.Do(msgReq)
 	if err != nil {
-		return err
+		cancel()
+		return fmt.Errorf("failed to send message: %w", err)
 	}
-	defer resp.Body.Close()
+	msgResp.Body.Close()
 
-	chunkID := fmt.Sprintf("chatcmpl-%s", sessionID)
-	created := time.Now().Unix()
-
-	chunks <- models.StreamChunk{
-		ID:      chunkID,
-		Object:  "chat.completion.chunk",
-		Created: created,
-		Model:   "opencode",
-		Choices: []models.ChunkChoice{
-			{
-				Index: 0,
-				Delta: models.Delta{
-					Role: "assistant",
-				},
-			},
-		},
-	}
-
-	bodyBytes, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return fmt.Errorf("failed to read response: %w", err)
-	}
-
-	var ocResp OpenCodeResponse
-	if err := json.Unmarshal(bodyBytes, &ocResp); err != nil {
-		return fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	if ocResp.Error != nil && !ocResp.Success {
-		return fmt.Errorf("opencode error: %v", ocResp.Error)
-	}
-
-	for _, part := range ocResp.Parts {
-		if part.Type == "text" && part.Text != "" {
-			chunks <- models.StreamChunk{
-				ID:      chunkID,
-				Object:  "chat.completion.chunk",
-				Created: created,
-				Model:   "opencode",
-				Choices: []models.ChunkChoice{
-					{
-						Index: 0,
-						Delta: models.Delta{
-							Content: part.Text,
-						},
-					},
-				},
-			}
+	// Wait for events to complete or timeout
+	select {
+	case <-messageIDChan:
+		// Message started, wait for completion
+		select {
+		case err := <-errChan:
+			return err
+		case <-eventCtx.Done():
+			// Stream completed
+		case <-time.After(120 * time.Second):
+			cancel()
+			return fmt.Errorf("streaming timeout")
 		}
+	case <-time.After(30 * time.Second):
+		cancel()
+		return fmt.Errorf("timeout waiting for message to start")
 	}
 
+	// Send final chunk
 	chunks <- models.StreamChunk{
 		ID:      chunkID,
 		Object:  "chat.completion.chunk",
 		Created: created,
-		Model:   "opencode",
+		Model:   modelID,
 		Choices: []models.ChunkChoice{
 			{
 				Index:        0,
