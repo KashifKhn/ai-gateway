@@ -271,6 +271,15 @@ func parseModelID(modelID string) (providerID, model string) {
 	if len(parts) == 2 {
 		return parts[0], parts[1]
 	}
+
+	if strings.HasPrefix(modelID, "gemini-") || strings.HasPrefix(modelID, "gemini") {
+		return "google", modelID
+	}
+
+	if strings.HasSuffix(modelID, "-free") {
+		return "opencode", modelID
+	}
+
 	return "opencode", modelID
 }
 
