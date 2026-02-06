@@ -30,26 +30,26 @@ backends:
     port: 3001
     timeout: 60s
     models:
-      - id: "big-pickle"
-        aliases: ["pickle", "bp"]
+      - id: "opencode/big-pickle-free"
+        aliases: ["big-pickle", "pickle", "bp"]
         free: true
-      - id: "grok-code-fast-1"
-        aliases: ["grok", "grok-fast"]
+      - id: "opencode/grok-code-fast-1-free"
+        aliases: ["grok", "grok-fast", "grok-code-fast-1"]
         free: true
-      - id: "glm-4.7"
-        aliases: ["glm", "glm4"]
+      - id: "opencode/glm-4.7-free"
+        aliases: ["glm", "glm4", "glm-4.7"]
         free: true
-      - id: "minimax-m2.1"
-        aliases: ["minimax", "mm"]
+      - id: "opencode/minimax-m2.1-free"
+        aliases: ["minimax", "mm", "minimax-m2.1"]
         free: true
-      - id: "gpt-5-nano"
-        aliases: ["gpt5", "nano", "gpt-5"]
+      - id: "opencode/gpt-5-nano-free"
+        aliases: ["gpt5", "nano", "gpt-5", "gpt-5-nano"]
         free: true
-      - id: "kimi-k2.5"
-        aliases: ["kimi", "k2.5"]
+      - id: "opencode/kimi-k2.5-free"
+        aliases: ["kimi", "k2.5", "kimi-k2.5"]
         free: true
-      - id: "trinity-large"
-        aliases: ["trinity", "tl"]
+      - id: "opencode/trinity-large-free"
+        aliases: ["trinity", "tl", "trinity-large"]
         free: true
       
       # === Google Gemini Models (Premium - via your subscription) ===
