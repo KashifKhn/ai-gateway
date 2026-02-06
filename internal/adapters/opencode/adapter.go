@@ -55,6 +55,12 @@ func (a *Adapter) Initialize(cfg map[string]interface{}) error {
 		for _, alias := range m.Aliases {
 			a.aliases[alias] = m.ID
 		}
+
+		_, modelWithoutPrefix := parseModelID(m.ID)
+		if modelWithoutPrefix != m.ID {
+			a.models[modelWithoutPrefix] = m
+			a.aliases[modelWithoutPrefix] = m.ID
+		}
 	}
 
 	if err := a.HealthCheck(); err != nil {
