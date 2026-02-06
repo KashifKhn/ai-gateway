@@ -119,12 +119,31 @@ func (a *Adapter) ListModels() ([]models.Model, error) {
 }
 
 func (a *Adapter) SupportsModel(modelID string) bool {
+	log.Printf("[MODEL CHECK] Checking if model '%s' is supported", modelID)
+	log.Printf("[MODEL CHECK] Available models: %v", func() []string {
+		keys := make([]string, 0, len(a.models))
+		for k := range a.models {
+			keys = append(keys, k)
+		}
+		return keys
+	}())
+	log.Printf("[MODEL CHECK] Available aliases: %v", func() []string {
+		keys := make([]string, 0, len(a.aliases))
+		for k := range a.aliases {
+			keys = append(keys, k)
+		}
+		return keys
+	}())
+
 	if _, ok := a.models[modelID]; ok {
+		log.Printf("[MODEL CHECK] Found in models map")
 		return true
 	}
 	if _, ok := a.aliases[modelID]; ok {
+		log.Printf("[MODEL CHECK] Found in aliases map")
 		return true
 	}
+	log.Printf("[MODEL CHECK] NOT FOUND")
 	return false
 }
 
