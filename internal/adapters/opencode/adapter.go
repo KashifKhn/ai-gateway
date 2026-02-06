@@ -132,7 +132,7 @@ func (a *Adapter) SupportsStreaming() bool {
 }
 
 func (a *Adapter) Chat(ctx context.Context, req *models.ChatRequest) (*models.ChatResponse, error) {
-	sessionID, err := a.createSession(ctx, req.Model)
+	sessionID, err := a.createSession(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create session: %w", err)
 	}
@@ -150,7 +150,7 @@ func (a *Adapter) Chat(ctx context.Context, req *models.ChatRequest) (*models.Ch
 		return nil, fmt.Errorf("no user message found")
 	}
 
-	fullContent, err := a.sendMessageNonStreaming(ctx, sessionID, userMessage)
+	fullContent, err := a.sendMessageNonStreaming(ctx, sessionID, userMessage, req.Model)
 	if err != nil {
 		return nil, fmt.Errorf("failed to send message: %w", err)
 	}
@@ -181,7 +181,7 @@ func (a *Adapter) ChatStream(ctx context.Context, req *models.ChatRequest) (<-ch
 		defer close(chunks)
 		defer close(errs)
 
-		sessionID, err := a.createSession(ctx, req.Model)
+		sessionID, err := a.createSession(ctx)
 		if err != nil {
 			errs <- fmt.Errorf("failed to create session: %w", err)
 			return
@@ -201,7 +201,7 @@ func (a *Adapter) ChatStream(ctx context.Context, req *models.ChatRequest) (<-ch
 			return
 		}
 
-		err = a.sendMessageStreaming(ctx, sessionID, userMessage, chunks)
+		err = a.sendMessageStreaming(ctx, sessionID, userMessage, req.Model, chunks)
 		if err != nil {
 			errs <- err
 		}
@@ -210,7 +210,7 @@ func (a *Adapter) ChatStream(ctx context.Context, req *models.ChatRequest) (<-ch
 	return chunks, errs
 }
 
-func (a *Adapter) createSession(ctx context.Context, model string) (string, error) {
+func (a *Adapter) createSession(ctx context.Context) (string, error) {
 	reqBody := map[string]interface{}{}
 	body, _ := json.Marshal(reqBody)
 
@@ -264,7 +264,15 @@ type OpenCodeResponse struct {
 	Success bool        `json:"success"`
 }
 
-func (a *Adapter) sendMessageNonStreaming(ctx context.Context, sessionID, message string) (string, error) {
+func parseModelID(modelID string) (providerID, model string) {
+	parts := strings.Split(modelID, "/")
+	if len(parts) == 2 {
+		return parts[0], parts[1]
+	}
+	return "opencode", modelID
+}
+
+func (a *Adapter) sendMessageNonStreaming(ctx context.Context, sessionID, message, modelID string) (string, error) {
 	reqBody := map[string]interface{}{
 		"parts": []map[string]interface{}{
 			{
@@ -273,6 +281,15 @@ func (a *Adapter) sendMessageNonStreaming(ctx context.Context, sessionID, messag
 			},
 		},
 	}
+
+	if modelID != "" {
+		providerID, model := parseModelID(modelID)
+		reqBody["model"] = map[string]string{
+			"providerID": providerID,
+			"modelID":    model,
+		}
+	}
+
 	body, _ := json.Marshal(reqBody)
 
 	req, err := http.NewRequestWithContext(ctx, "POST", a.baseURL+"/session/"+sessionID+"/message", bytes.NewReader(body))
@@ -311,7 +328,7 @@ func (a *Adapter) sendMessageNonStreaming(ctx context.Context, sessionID, messag
 	return fullContent.String(), nil
 }
 
-func (a *Adapter) sendMessageStreaming(ctx context.Context, sessionID, message string, chunks chan<- models.StreamChunk) error {
+func (a *Adapter) sendMessageStreaming(ctx context.Context, sessionID, message, modelID string, chunks chan<- models.StreamChunk) error {
 	reqBody := map[string]interface{}{
 		"parts": []map[string]interface{}{
 			{
@@ -320,6 +337,15 @@ func (a *Adapter) sendMessageStreaming(ctx context.Context, sessionID, message s
 			},
 		},
 	}
+
+	if modelID != "" {
+		providerID, model := parseModelID(modelID)
+		reqBody["model"] = map[string]string{
+			"providerID": providerID,
+			"modelID":    model,
+		}
+	}
+
 	body, _ := json.Marshal(reqBody)
 
 	req, err := http.NewRequestWithContext(ctx, "POST", a.baseURL+"/session/"+sessionID+"/message", bytes.NewReader(body))
