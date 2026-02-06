@@ -140,19 +140,44 @@ func (a *Adapter) Chat(ctx context.Context, req *models.ChatRequest) (*models.Ch
 	}
 	defer a.deleteSession(sessionID)
 
-	var userMessage string
-	for i := len(req.Messages) - 1; i >= 0; i-- {
-		if req.Messages[i].Role == "user" {
-			userMessage = req.Messages[i].Content
-			break
+	// Build conversation context by replaying all messages
+	var systemPrompt string
+	var conversationHistory []models.Message
+
+	// Separate system prompt from conversation
+	for _, msg := range req.Messages {
+		if msg.Role == "system" {
+			systemPrompt = msg.Content
+		} else {
+			conversationHistory = append(conversationHistory, msg)
 		}
 	}
 
-	if userMessage == "" {
-		return nil, fmt.Errorf("no user message found")
+	if len(conversationHistory) == 0 {
+		return nil, fmt.Errorf("no messages found")
 	}
 
-	fullContent, err := a.sendMessageNonStreaming(ctx, sessionID, userMessage, req.Model)
+	// Send all messages except the last one to build context
+	for i := 0; i < len(conversationHistory)-1; i++ {
+		msg := conversationHistory[i]
+		if msg.Role == "user" {
+			// Send previous user messages without waiting for response
+			_, err := a.sendMessageNonStreaming(ctx, sessionID, msg.Content, req.Model, "")
+			if err != nil {
+				log.Printf("Warning: failed to send context message: %v", err)
+			}
+		}
+		// Note: OpenCode doesn't have a direct way to inject assistant messages,
+		// so we rely on its internal context management
+	}
+
+	// Send the final user message with system prompt
+	lastMsg := conversationHistory[len(conversationHistory)-1]
+	if lastMsg.Role != "user" {
+		return nil, fmt.Errorf("last message must be from user")
+	}
+
+	fullContent, err := a.sendMessageNonStreaming(ctx, sessionID, lastMsg.Content, req.Model, systemPrompt)
 	if err != nil {
 		return nil, fmt.Errorf("failed to send message: %w", err)
 	}
@@ -190,20 +215,44 @@ func (a *Adapter) ChatStream(ctx context.Context, req *models.ChatRequest) (<-ch
 		}
 		defer a.deleteSession(sessionID)
 
-		var userMessage string
-		for i := len(req.Messages) - 1; i >= 0; i-- {
-			if req.Messages[i].Role == "user" {
-				userMessage = req.Messages[i].Content
-				break
+		// Build conversation context by replaying all messages
+		var systemPrompt string
+		var conversationHistory []models.Message
+
+		// Separate system prompt from conversation
+		for _, msg := range req.Messages {
+			if msg.Role == "system" {
+				systemPrompt = msg.Content
+			} else {
+				conversationHistory = append(conversationHistory, msg)
 			}
 		}
 
-		if userMessage == "" {
-			errs <- fmt.Errorf("no user message found")
+		if len(conversationHistory) == 0 {
+			errs <- fmt.Errorf("no messages found")
 			return
 		}
 
-		err = a.sendMessageStreaming(ctx, sessionID, userMessage, req.Model, chunks)
+		// Send all messages except the last one to build context
+		for i := 0; i < len(conversationHistory)-1; i++ {
+			msg := conversationHistory[i]
+			if msg.Role == "user" {
+				// Send previous user messages without waiting for response
+				_, err := a.sendMessageNonStreaming(ctx, sessionID, msg.Content, req.Model, "")
+				if err != nil {
+					log.Printf("Warning: failed to send context message: %v", err)
+				}
+			}
+		}
+
+		// Send the final user message with system prompt (streaming)
+		lastMsg := conversationHistory[len(conversationHistory)-1]
+		if lastMsg.Role != "user" {
+			errs <- fmt.Errorf("last message must be from user")
+			return
+		}
+
+		err = a.sendMessageStreaming(ctx, sessionID, lastMsg.Content, req.Model, systemPrompt, chunks)
 		if err != nil {
 			errs <- err
 		}
@@ -283,7 +332,7 @@ func parseModelID(modelID string) (providerID, model string) {
 	return "opencode", modelID
 }
 
-func (a *Adapter) sendMessageNonStreaming(ctx context.Context, sessionID, message, modelID string) (string, error) {
+func (a *Adapter) sendMessageNonStreaming(ctx context.Context, sessionID, message, modelID, systemPrompt string) (string, error) {
 	reqBody := map[string]interface{}{
 		"parts": []map[string]interface{}{
 			{
@@ -299,6 +348,11 @@ func (a *Adapter) sendMessageNonStreaming(ctx context.Context, sessionID, messag
 			"providerID": providerID,
 			"modelID":    model,
 		}
+	}
+
+	// Add system prompt if provided
+	if systemPrompt != "" {
+		reqBody["system"] = systemPrompt
 	}
 
 	body, _ := json.Marshal(reqBody)
@@ -339,7 +393,7 @@ func (a *Adapter) sendMessageNonStreaming(ctx context.Context, sessionID, messag
 	return fullContent.String(), nil
 }
 
-func (a *Adapter) sendMessageStreaming(ctx context.Context, sessionID, message, modelID string, chunks chan<- models.StreamChunk) error {
+func (a *Adapter) sendMessageStreaming(ctx context.Context, sessionID, message, modelID, systemPrompt string, chunks chan<- models.StreamChunk) error {
 	chunkID := fmt.Sprintf("chatcmpl-%s", sessionID)
 	created := time.Now().Unix()
 
@@ -514,6 +568,11 @@ func (a *Adapter) sendMessageStreaming(ctx context.Context, sessionID, message, 
 			"providerID": providerID,
 			"modelID":    model,
 		}
+	}
+
+	// Add system prompt if provided
+	if systemPrompt != "" {
+		reqBody["system"] = systemPrompt
 	}
 
 	body, _ := json.Marshal(reqBody)
