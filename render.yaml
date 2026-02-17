@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: ai-gateway
+    env: go
+    region: oregon
+    plan: free
+    buildCommand: go build -o ai-gateway ./cmd/server
+    startCommand: ./ai-gateway
+    envVars:
+      - key: PORT
+        generateValue: true
+      - key: OPENCODE_HOST
+        value: opencode-server
+      - key: OPENCODE_PORT
+        value: 10000
